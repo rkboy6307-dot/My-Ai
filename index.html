@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="theme-color" content="#111827">
+  <title>My AI</title>
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#0b1020;color:#f8fafc;height:100vh;overflow:hidden}
+    .app{height:100vh;display:flex;flex-direction:column;max-width:900px;margin:auto;background:#0f172a}
+    header{height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid #243047;background:#111827;flex-shrink:0}
+    .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px}
+    .logo{width:36px;height:36px;border-radius:12px;display:grid;place-items:center;background:#2563eb;font-size:20px}
+    button{font:inherit}
+    .new{border:1px solid #334155;background:#1e293b;color:#fff;border-radius:10px;padding:8px 12px;cursor:pointer}
+    .new:active{transform:scale(.98)}
+    main{flex:1;overflow:auto;padding:24px 16px 120px;scroll-behavior:smooth}
+    .welcome{max-width:700px;margin:8vh auto 0;text-align:center}
+    .welcome h1{font-size:34px;margin:0 0 10px}
+    .welcome p{color:#94a3b8;margin:0 auto 24px;line-height:1.6}
+    .cards{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;text-align:left}
+    .card{padding:14px;border:1px solid #26354d;background:#111c30;border-radius:14px;color:#cbd5e1}
+    .card b{display:block;color:#fff;margin-bottom:5px}
+    .messages{max-width:760px;margin:auto;display:flex;flex-direction:column;gap:14px}
+    .row{display:flex}
+    .row.user{justify-content:flex-end}
+    .bubble{max-width:82%;padding:12px 15px;border-radius:16px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
+    .user .bubble{background:#2563eb;color:white;border-bottom-right-radius:5px}
+    .assistant .bubble{background:#172238;border:1px solid #273751;color:#e2e8f0;border-bottom-left-radius:5px}
+    .error{color:#fecaca!important;background:#3b1518!important;border-color:#7f1d1d!important}
+    .typing{display:inline-flex;gap:4px;align-items:center}
+    .typing span{width:6px;height:6px;border-radius:50%;background:#94a3b8;animation:b 1s infinite}
+    .typing span:nth-child(2){animation-delay:.15s}.typing span:nth-child(3){animation-delay:.3s}
+    @keyframes b{0%,60%,100%{opacity:.25;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+    .composer-wrap{position:fixed;bottom:0;left:0;right:0;background:linear-gradient(transparent,#0b1020 24%);padding:24px 12px 12px}
+    .composer{max-width:760px;margin:auto;display:flex;gap:8px;align-items:flex-end;background:#111827;border:1px solid #334155;border-radius:16px;padding:8px}
+    textarea{flex:1;resize:none;min-height:42px;max-height:130px;border:0;outline:0;background:transparent;color:#fff;padding:10px;font:inherit;line-height:1.4}
+    textarea::placeholder{color:#64748b}
+    #send{width:44px;height:44px;border:0;border-radius:12px;background:#2563eb;color:#fff;cursor:pointer;font-size:18px}
+    #send:disabled{opacity:.45;cursor:not-allowed}
+    .hint{max-width:760px;margin:7px auto 0;text-align:center;color:#64748b;font-size:11px}
+    @media(max-width:600px){
+      .welcome{margin-top:5vh}.welcome h1{font-size:29px}.cards{grid-template-columns:1fr}
+      .bubble{max-width:90%} main{padding-left:12px;padding-right:12px}
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand"><div class="logo">✦</div><span>My AI</span></div>
+    <button class="new" id="newChat">New chat</button>
+  </header>
+
+  <main id="main">
+    <section class="welcome" id="welcome">
+      <h1>How can I help?</h1>
+      <p>Ask anything in Hindi, Hinglish, or English. Your conversation is sent to the secure server for an AI response.</p>
+      <div class="cards">
+        <div class="card" data-prompt="Mujhe Excel basics se sikhao."><b>📊 Excel</b>Start learning from basics</div>
+        <div class="card" data-prompt="Mere liye ek simple business idea batao."><b>💡 Business</b>Ideas and planning</div>
+        <div class="card" data-prompt="Mujhe English writing practice karwao."><b>✍️ English</b>Writing and correction</div>
+        <div class="card" data-prompt="Mujhe ek 5 minute YouTube video ka script do."><b>🎬 YouTube</b>Scripts and content ideas</div>
+      </div>
+    </section>
+    <section class="messages" id="messages"></section>
+  </main>
+
+  <div class="composer-wrap">
+    <div class="composer">
+      <textarea id="input" rows="1" placeholder="Message My AI..."></textarea>
+      <button id="send" aria-label="Send">➤</button>
+    </div>
+    <div class="hint">Enter to send · Shift+Enter for a new line</div>
+  </div>
+</div>
+
+<script>
+  const main = document.getElementById("main");
+  const input = document.getElementById("input");
+  const send = document.getElementById("send");
+  const messages = document.getElementById("messages");
+  const welcome = document.getElementById("welcome");
+  const newChat = document.getElementById("newChat");
+
+  let history = [];
+  let busy = false;
+
+  function addMessage(role, text, isError=false) {
+    welcome.style.display = "none";
+    const row = document.createElement("div");
+    row.className = "row " + role;
+    const bubble = document.createElement("div");
+    bubble.className = "bubble" + (isError ? " error" : "");
+    bubble.textContent = text;
+    row.appendChild(bubble);
+    messages.appendChild(row);
+    main.scrollTop = main.scrollHeight;
+    return bubble;
+  }
+
+  function addTyping() {
+    welcome.style.display = "none";
+    const row = document.createElement("div");
+    row.className = "row assistant";
+    row.id = "typingRow";
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.innerHTML = '<span class="typing"><span></span><span></span><span></span></span>';
+    row.appendChild(bubble);
+    messages.appendChild(row);
+    main.scrollTop = main.scrollHeight;
+  }
+
+  function removeTyping() {
+    document.getElementById("typingRow")?.remove();
+  }
+
+  async function sendMessage(value) {
+    const message = (value ?? input.value).trim();
+    if (!message || busy) return;
+
+    input.value = "";
+    input.style.height = "42px";
+    addMessage("user", message);
+    addTyping();
+    busy = true;
+    send.disabled = true;
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({message, history})
+      });
+
+      let data = {};
+      try { data = await response.json(); } catch (_) {}
+
+      removeTyping();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Server request failed.");
+      }
+
+      const reply = data.reply || "No response received.";
+      addMessage("assistant", reply);
+
+      history.push({role:"user", text:message});
+      history.push({role:"assistant", text:reply});
+      history = history.slice(-20);
+    } catch (err) {
+      removeTyping();
+      addMessage("assistant", "Error: " + (err.message || "Please try again."), true);
+    } finally {
+      busy = false;
+      send.disabled = false;
+      input.focus();
+    }
+  }
+
+  send.addEventListener("click", () => sendMessage());
+
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  input.addEventListener("input", () => {
+    input.style.height = "42px";
+    input.style.height = Math.min(input.scrollHeight, 130) + "px";
+  });
+
+  newChat.addEventListener("click", () => {
+    history = [];
+    messages.innerHTML = "";
+    welcome.style.display = "block";
+    input.value = "";
+    input.focus();
+  });
+
+  document.querySelectorAll(".card").forEach(card => {
+    card.addEventListener("click", () => {
+      input.value = card.dataset.prompt;
+      input.focus();
+      sendMessage();
+    });
+  });
+
+  input.focus();
+</script>
+</body>
+</html>
